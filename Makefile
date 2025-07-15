@@ -17,9 +17,11 @@ RM			:= rm -rf
 
 DEBUG		?= 0
 
-all: $(NAME) shaders
+all: $(NAME)
 
 $(NAME): $(OBJS)
+	glslc shaders/shader.frag -o shaders/frag.spv
+	glslc shaders/shader.vert -o shaders/vert.spv
 	$(CC) $(CFLAGS) $(OBJS) $(LFLAGS) -o $(NAME)
 
 $(DIR_OBJS)/%.o: $(DIR_SRCS)/%.cpp
@@ -35,6 +37,8 @@ clean:
 
 fclean: clean
 	$(RM) $(NAME)
+	glslc shaders/shader.frag -o shaders/frag.spv
+	glslc shaders/shader.vert -o shaders/vert.spv
 	rm shaders/frag.spv
 	rm shaders/vert.spv
 
