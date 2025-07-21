@@ -3,3 +3,4 @@ compile_commands.json
 .objs
 Vulkan
 shaders/*.spv
+.vscode

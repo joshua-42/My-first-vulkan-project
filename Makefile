@@ -4,13 +4,14 @@ SRCS		:= srcs/App.cpp
 
 DIR_SRCS	:= srcs
 DIR_OBJS	:= .objs
+DEP			:= dependencies
 
 OBJS		:= $(addprefix $(DIR_OBJS)/, $(notdir $(SRCS:.cpp=.o)))
 
 CC			:= c++
-CFLAGS		:= -Wall -Werror -Wextra -std=c++17 -g
+CFLAGS		:= -Wall -Wextra -std=c++17 -g
 #CFLAGS		:= -std=c++17 -g
-IFLAGS		:= -I include
+IFLAGS		:= -I include -I $(DEP)/glm -I $(DEP)/stb -I $(DEP)/tinyobj
 LFLAGS		:= -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 RM			:= rm -rf
