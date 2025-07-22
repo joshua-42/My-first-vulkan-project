@@ -1,44 +1,48 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
-#include <iostream>
-#include <stdexcept>
-#include <cstdlib>
-#include <cstring>
-#include <vector>
-#include <map>
-#include <optional>
-#include <set>
-#include <limits>
-#include <algorithm>
-#include <fstream>
-#include <chrono>
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/hash.hpp>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#define VK_USE_PLATFORM_WIN32_KHR
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <vulkan/vulkan_core.h>
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
-#include <unordered_map>
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/hash.hpp>
 
+#include <iostream>
+#include <fstream>
+#include <stdexcept>
+#include <algorithm>
+#include <chrono>
+#include <vector>
+#include <cstring>
+#include <cstdlib>
+#include <cstdint>
+#include <limits>
+#include <array>
+#include <optional>
+#include <set>
+#include <unordered_map>
+#include <vulkan/vulkan.h>
 
 #ifndef DEBUG
 # define DEBUG 0
 #endif
 
+const uint32_t WIDTH = 1920;
+const uint32_t HEIGHT = 1080;
+
 const std::string MODEL_PATH = "models/viking_room.obj";
 const std::string TEXTURE_PATH = "textures/viking_room.png";
+
+const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
@@ -48,14 +52,6 @@ const std::vector<const char*> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
-const int MAX_FRAMES_IN_FLIGHT = 2;
-
-struct SwapChainSupportDetails {
-	VkSurfaceCapabilitiesKHR capabilities;
-	std::vector<VkSurfaceFormatKHR> formats;
-	std::vector<VkPresentModeKHR> presentModes;
-};
-
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
 	std::optional<uint32_t> presentFamily;
@@ -63,6 +59,12 @@ struct QueueFamilyIndices {
 	bool isComplete() {
 		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
+};
+
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
 };
 
 struct Vertex {
@@ -109,9 +111,7 @@ struct Vertex {
 	namespace std {
 		template<> struct hash<Vertex> {
 			size_t operator()(Vertex const& vertex) const {
-				return ((hash<glm::vec3>()(vertex.pos) ^
-					(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-					(hash<glm::vec2>()(vertex.texCoord) << 1);
+				return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.texCoord) << 1);
 			}
 		};
 	}
@@ -121,28 +121,6 @@ struct UniformBufferObject {
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 };
-
-// const std::vector<Vertex> vertices = {
-// 	{{0.5f, -0.5f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-// 	{{0.5f, 00.5f, 1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-// 	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-// 	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-// 	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-// 	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-// 	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-// 	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-
-// 	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-// 	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-// 	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-// 	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
-// };
-
-// const std::vector<uint16_t> indices = {
-// 	0, 1, 2, 2, 3, 0,
-// 	4, 5, 6, 6, 7, 4
-// };
 
 class App {
 public:
@@ -221,7 +199,6 @@ private:
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		// glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 		_window = glfwCreateWindow(1920, 1080, "Vulkan", nullptr, nullptr);
 		glfwSetWindowUserPointer(_window, this);
@@ -269,17 +246,21 @@ private:
 	}
 
 	void cleanupSwapChain() {
+		vkDestroyImageView(_device, _depthImageView, nullptr);
+		vkDestroyImage(_device, _depthImage, nullptr);
+		vkFreeMemory(_device, _depthImageMemory, nullptr);
+
 		vkDestroyImageView(_device, _colorImageView, nullptr);
 		vkDestroyImage(_device, _colorImage, nullptr);
 		vkFreeMemory(_device, _colorImageMemory, nullptr);
 
-		for (size_t i = 0; i < _swapChainFramebuffers.size(); i++) {
-			vkDestroyFramebuffer(_device, _swapChainFramebuffers[i], nullptr);
-		}
+		for (auto framebuffer : _swapChainFramebuffers) {
+            vkDestroyFramebuffer(_device, framebuffer, nullptr);
+        }
 
-		for (size_t i = 0; i < _swapChainImageViews.size(); i++) {
-			vkDestroyImageView(_device, _swapChainImageViews[i], nullptr);
-		}
+        for (auto imageView : _swapChainImageViews) {
+            vkDestroyImageView(_device, imageView, nullptr);
+        }
 
 		vkDestroySwapchainKHR(_device, _swapChain, nullptr);
 	}
@@ -287,13 +268,8 @@ private:
 	void cleanup() {
 		cleanupSwapChain();
 
-		vkDestroyImageView(_device, _textureImageView, nullptr);
-
-		vkDestroyImage(_device, _textureImage, nullptr);
-		vkFreeMemory(_device, _textureImageMemory, nullptr);
-
 		vkDestroyPipeline(_device, _graphicsPipeline, nullptr);
-	    vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
+		vkDestroyPipelineLayout(_device, _pipelineLayout, nullptr);
 		vkDestroyRenderPass(_device, _renderPass, nullptr);
 
 		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -303,9 +279,11 @@ private:
 
 		vkDestroyDescriptorPool(_device, _descriptorPool, nullptr);
 
-		vkDestroyDescriptorSetLayout(_device, _descriptorSetLayout, nullptr);
+		vkDestroySampler(_device, _textureSampler, nullptr);
+		vkDestroyImageView(_device, _textureImageView, nullptr);
 
-		vkDestroyDescriptorSetLayout(_device, _descriptorSetLayout, nullptr);
+		vkDestroyImage(_device, _textureImage, nullptr);
+		vkFreeMemory(_device, _textureImageMemory, nullptr);
 
 		vkDestroyDescriptorSetLayout(_device, _descriptorSetLayout, nullptr);
 
@@ -324,10 +302,6 @@ private:
 		vkDestroyCommandPool(_device, _commandPool, nullptr);
 
 		vkDestroyDevice(_device, nullptr);
-
-		// for (auto imageView : _swapChainImageViews) {
-			// vkDestroyImageView(_device, imageView, nullptr);
-		// }
 
 		vkDestroySurfaceKHR(_instance, _surface, nullptr);
 		vkDestroyInstance(_instance, nullptr);
@@ -356,20 +330,20 @@ private:
 		createFrameBuffers();
 	}
 
-	void createInstance() {
-		VkApplicationInfo appInfo{};
-		VkInstanceCreateInfo createInfo{};
-	
+	void createInstance() {	
 		if (DEBUG && !checkValidationLayer()) {
 			throw std::runtime_error("Validation layer requested, but not available\n");
 		}
+
+		VkApplicationInfo appInfo{};
 	    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	   appInfo.pApplicationName = "Vulkan";
+		appInfo.pApplicationName = "Vulkan";
 		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	    appInfo.pEngineName = "No Engine";
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	    appInfo.apiVersion = VK_API_VERSION_1_0;
 
+		VkInstanceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		createInfo.pApplicationInfo = &appInfo;
 
@@ -382,6 +356,8 @@ private:
 		}
 		else {
 			createInfo.enabledLayerCount = 0;
+
+			createInfo.pNext = nullptr;
 		}
 
 		if (vkCreateInstance(&createInfo, nullptr, &_instance) != VK_SUCCESS) {
@@ -702,9 +678,9 @@ private:
 		multisampling.sampleShadingEnable = VK_TRUE;
 		multisampling.rasterizationSamples = _msaaSamples;
 		multisampling.minSampleShading = 1.0f; // Optional
-		multisampling.pSampleMask = nullptr; // Optional
-		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-		multisampling.alphaToOneEnable = VK_FALSE; // Optional
+		//multisampling.pSampleMask = nullptr; // Optional
+		//multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+		//multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
 		VkPipelineDepthStencilStateCreateInfo depthStencil{};
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -799,8 +775,8 @@ private:
 		for (size_t i = 0; i < _swapChainImageViews.size(); i++) {
 			std::array<VkImageView, 3> _attachments = {
 				_colorImageView,
+				_depthImageView,
 				_swapChainImageViews[i],
-				_depthImageView
 			};
 
 			VkFramebufferCreateInfo framebufferInfo{};
