@@ -39,7 +39,7 @@
 const uint32_t WIDTH = 1920;
 const uint32_t HEIGHT = 1080;
 
-const std::string MODEL_PATH = "models/viking_room.obj";
+std::string MODEL_PATH;
 const std::string TEXTURE_PATH = "textures/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -71,6 +71,7 @@ struct Vertex {
 	glm::vec3 pos;
 	glm::vec3 color;
 	glm::vec2 texCoord;
+	glm::vec3 normal;
 
 	static VkVertexInputBindingDescription getBindingDescription() {
 		VkVertexInputBindingDescription bindingDescription{};
@@ -82,8 +83,8 @@ struct Vertex {
 		return bindingDescription;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
+	static std::array<VkVertexInputAttributeDescription, 4> getAttributeDescriptions() {
+        std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -99,6 +100,11 @@ struct Vertex {
 		attributeDescriptions[2].location = 2;
 		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
 		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
+		attributeDescriptions[3].binding = 0;
+		attributeDescriptions[3].location = 3;
+		attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[3].offset = offsetof(Vertex, normal);
 
 		return attributeDescriptions;
 	}
@@ -193,6 +199,15 @@ private:
 	std::vector<VkFence> _inFlightFences;
 	uint32_t _currentFrame = 0;
 
+	//camera
+
+	glm::vec3 _cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+	glm::vec3 _cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+	glm::vec3 _cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+	std::chrono::time_point<std::chrono::high_resolution_clock> _lastFrameTime;
+	float _rotationAngle = 0.0f;
+	int ROTATE = -1;
+
 	bool framebufferResize = false;
 
 	void initWindow() {
@@ -206,6 +221,8 @@ private:
 	}
 
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+		(void) width;
+		(void) height;
 		auto app = reinterpret_cast<App*>(glfwGetWindowUserPointer(window));
 		app->framebufferResize = true;
 	}
@@ -237,9 +254,65 @@ private:
 		createSyncObject();
 	}
 
+	void handleKeyboardInput(float deltaTime) {
+		float speed = 20.0f * deltaTime;
+
+		// Calcul du vecteur directionnel (avant), sans inclinaison verticale
+		glm::vec3 forward = glm::normalize(glm::vec3(_cameraFront.x, 0.0f, _cameraFront.z));
+
+		// Vecteur latéral (droite)
+		glm::vec3 right = glm::normalize(glm::cross(_cameraFront, _cameraUp));
+
+		// Rappel : _cameraFront est supposé déjà normalisé et mis à jour via souris ou autre
+
+		static bool rWasPressed = false;
+		bool rNow = glfwGetKey(_window, GLFW_KEY_R) == GLFW_PRESS;
+
+		if (glfwGetKey(_window, GLFW_KEY_W) == GLFW_PRESS)
+			_cameraPos += speed * forward;
+		if (glfwGetKey(_window, GLFW_KEY_S) == GLFW_PRESS)
+			_cameraPos -= speed * forward;
+		if (glfwGetKey(_window, GLFW_KEY_A) == GLFW_PRESS)
+			_cameraPos -= speed * right;
+		if (glfwGetKey(_window, GLFW_KEY_D) == GLFW_PRESS)
+			_cameraPos += speed * right;
+		if (glfwGetKey(_window, GLFW_KEY_SPACE) == GLFW_PRESS) // monter
+			_cameraPos.y += speed;
+		if (glfwGetKey(_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) // descendre
+			_cameraPos.y -= speed;
+		if (ROTATE == -1 && glfwGetKey(_window, GLFW_KEY_E) == GLFW_PRESS) {{
+			_rotationAngle += deltaTime * glm::radians(90.0f); // 90°/sec
+				if (_rotationAngle > glm::two_pi<float>())
+					_rotationAngle -= glm::two_pi<float>();
+		}}
+		if (ROTATE == -1 && glfwGetKey(_window, GLFW_KEY_Q) == GLFW_PRESS) {{
+			_rotationAngle += deltaTime * glm::radians(-90.0f); // 90°/sec
+				if (_rotationAngle > glm::two_pi<float>())
+					_rotationAngle -= glm::two_pi<float>();
+		}}
+
+		if (rNow && !rWasPressed) {
+			if (ROTATE == -1)
+				ROTATE = 1;
+			else 
+				ROTATE = -1;
+		}
+
+		rWasPressed = rNow;
+	}
+
+
+
 	void mainLoop() {
-		while (!glfwWindowShouldClose(_window)) {
-			glfwPollEvents();	
+		_lastFrameTime = std::chrono::high_resolution_clock::now();
+		while (!glfwWindowShouldClose(_window) && glfwGetKey(_window, GLFW_KEY_ESCAPE) != GLFW_PRESS) {
+			glfwPollEvents();
+
+			auto currentTime = std::chrono::high_resolution_clock::now();
+			float deltaTime = std::chrono::duration<float>(currentTime - _lastFrameTime).count();
+			_lastFrameTime = currentTime;
+
+			handleKeyboardInput(deltaTime);
 			drawFrame();
 		}
 		vkDeviceWaitIdle(_device);
@@ -666,9 +739,9 @@ private:
 		rasterizer.rasterizerDiscardEnable = VK_FALSE;
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		rasterizer.depthBiasEnable = VK_FALSE;
+		rasterizer.cullMode = VK_CULL_MODE_NONE ;
+		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		rasterizer.depthBiasEnable = VK_TRUE;
 		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
 		rasterizer.depthBiasClamp = 0.0f; // Optional
 		rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
@@ -868,10 +941,8 @@ private:
 
 		createImage(texWidth, texHeight, _mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _textureImage, _textureImageMemory);
 
-		// transitionImageLayout(_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
 		transitionImageLayout(_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, _mipLevels);
 		copyBufferToImage(stagingBuffer, _textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-		// transitionImageLayout(_textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _mipLevels);
 
 		generateMipmaps(_textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, _mipLevels);	
 	}
@@ -1009,6 +1080,7 @@ private:
 	}
 
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t miplevel) {
+		(void) miplevel;
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfo.image = image;
@@ -1060,6 +1132,7 @@ private:
 	}
 
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
+		(void) format;
 		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
 		VkImageMemoryBarrier barrier{};
@@ -1130,45 +1203,69 @@ private:
 		endSingleTimeCommands(commandBuffer);
 	}
 
-	void loadModel() {
-		tinyobj::attrib_t attrib;
-		std::vector<tinyobj::shape_t> shapes;
-		std::vector<tinyobj::material_t> materials;
-		std::string warn, err;
+void loadModel() {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
 
-		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
-			throw std::runtime_error(warn + err);
-		}
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+        throw std::runtime_error(warn + err);
+    }
 
-		std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+    vertices.clear();
+    indices.clear();
 
-		for (const auto& shape : shapes) {
-			for (const auto& index : shape.mesh.indices) {
-				Vertex vertex{};
+    // Pour un shading flat, on duplique les sommets
+    for (const auto& shape : shapes) {
+        size_t indexOffset = 0;
+        for (size_t f = 0; f < shape.mesh.num_face_vertices.size(); ++f) {
+            int fv = shape.mesh.num_face_vertices[f];
+            if (fv != 3)
+                throw std::runtime_error("Only triangular faces are supported for flat shading");
 
-				vertex.pos = {
-					attrib.vertices[3 * index.vertex_index + 0],
-					attrib.vertices[3 * index.vertex_index + 1],
-					attrib.vertices[3 * index.vertex_index + 2]
-				};
+            Vertex v[3];
+            for (int i = 0; i < 3; ++i) {
+                const tinyobj::index_t& idx = shape.mesh.indices[indexOffset + i];
 
-				vertex.texCoord = {
-					attrib.texcoords[2 * index.texcoord_index + 0],
-					attrib.texcoords[2 * index.texcoord_index + 1]
-				};
+                v[i].pos = {
+                    attrib.vertices[3 * idx.vertex_index + 0],
+                    attrib.vertices[3 * idx.vertex_index + 1],
+                    attrib.vertices[3 * idx.vertex_index + 2]
+                };
 
-				vertex.color = {1.0f, 1.0f, 1.0f};
+                if (idx.texcoord_index >= 0) {
+                    v[i].texCoord = {
+                        attrib.texcoords[2 * idx.texcoord_index + 0],
+                        1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]
+                    };
+                } else {
+                    v[i].texCoord = {0.0f, 0.0f};
+                }
 
+                v[i].color = {1.0f, 1.0f, 1.0f}; // peut être remplacé par des couleurs de matériaux si dispo
+            }
 
-				if (uniqueVertices.count(vertex) == 0) {
-					uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-					vertices.push_back(vertex);
-				}
+            // Calculer la normale du triangle
+            glm::vec3 edge1 = v[1].pos - v[0].pos;
+            glm::vec3 edge2 = v[2].pos - v[0].pos;
+            glm::vec3 faceNormal = glm::normalize(glm::cross(edge1, edge2));
 
-				indices.push_back(uniqueVertices[vertex]);
-			}
-		}
-	}
+            v[0].normal = faceNormal;
+            v[1].normal = faceNormal;
+            v[2].normal = faceNormal;
+
+            // Push les 3 sommets (pas d'unicite)
+            for (int i = 0; i < 3; ++i) {
+                indices.push_back(static_cast<uint32_t>(vertices.size()));
+                vertices.push_back(v[i]);
+            }
+
+            indexOffset += fv;
+        }
+    }
+}
+
 
 	void createVertexBuffer() {
 		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
@@ -1468,15 +1565,23 @@ private:
 	}
 
 	void updateUniformBuffer(uint32_t currentImage){
-		static auto startTime = std::chrono::high_resolution_clock::now();
+		static auto lastTime = std::chrono::high_resolution_clock::now();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
+		lastTime = currentTime;
+
+		if (ROTATE == 1) {
+			_rotationAngle += deltaTime * glm::radians(90.0f); // 90°/sec
+			if (_rotationAngle > glm::two_pi<float>())
+				_rotationAngle -= glm::two_pi<float>();
+		}
 
 		UniformBufferObject ubo{};
-		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), _swapChainExtent.width / (float) _swapChainExtent.height, 0.1f, 10.0f);
+
+		ubo.model = glm::rotate(glm::mat4(1.0f), _rotationAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.view = glm::lookAt(_cameraPos, _cameraPos + _cameraFront, _cameraUp);
+		ubo.proj = glm::perspective(glm::radians(45.0f), _swapChainExtent.width / (float) _swapChainExtent.height, 0.1f, 10000.0f);
 		ubo.proj[1][1] *= -1;
 		memcpy(_uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 	}
